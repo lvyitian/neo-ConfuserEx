@@ -17,15 +17,42 @@ namespace 'ConfuserEx.CLI':preset(normal);+rename;anti tamper(mode=jit,key=dynam
 preset(none);+rename;
 
 Usage examples:
-
-[assembly: Obfuscation(Exclude = false, Feature = "preset(minimum);+ctrl flow;-anti debug;+rename(mode=letters,flatten=false);")]
+[assembly: Obfuscation(Exclude = false, Feature = "preset(minimum);+ctrl flow;-anti debug;+rename(mode=letters,flatten=false,renPublic=false,renInternal=false);")]
 [assembly: Obfuscation(Exclude = false, Feature = "random seed: Hello!")]
 [assembly: Obfuscation(Exclude = false, Feature = "namespace 'Test':-rename")]
+[InternalsVisibleTo(Test.Test)]
 namespace Test {
 	[Obfuscation(Exclude = false, Feature = "constants")]
 	class Program {
 		public static void Main() {
 			Console.WriteLine("Hi");
+      Do.Work()'
 		}
 	}
+  
+  internal class Do {
+		public static void Work() {
+			PrivateWork();
+		}
+    
+		private static void PrivateWork() {
+			Console.WriteLine(" to all!");
+		}
+  }
+}
+
+Test assembly:
+namespace Test.Test {
+  using Test;
+  using NUnit.Framework;
+  
+  [TestFixture]
+  public class TestTests
+  {  
+    [Test]
+    public void DummyTest()
+    {
+      Assert.IsNotNullOrEmpty(Do.Work());
+    }  
+  }
 }
