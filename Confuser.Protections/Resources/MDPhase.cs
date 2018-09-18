@@ -8,6 +8,7 @@ using Confuser.Core.Helpers;
 using Confuser.Core.Services;
 using Confuser.Renamer;
 using dnlib.DotNet;
+using dnlib.DotNet.Emit;
 using dnlib.DotNet.Writer;
 
 namespace Confuser.Protections.Resources {
@@ -31,34 +32,56 @@ namespace Confuser.Protections.Resources {
 				bool hasPacker = ctx.Context.Packer != null;
 
 				List<EmbeddedResource> resources = ctx.Module.Resources.OfType<EmbeddedResource>().ToList();
-				if (!hasPacker)
-					ctx.Module.Resources.RemoveWhere(res => res is EmbeddedResource);
+			    if (!hasPacker)
+			    {
+			        ctx.Module.Resources.RemoveWhere(res => res is EmbeddedResource);
+			    }
 
 				// move resources
 				string asmName = ctx.Name.RandomName(RenameMode.Letters);
 				PublicKey pubKey = null;
-				if (writer.TheOptions.StrongNameKey != null)
-					pubKey = PublicKeyBase.CreatePublicKey(writer.TheOptions.StrongNameKey.PublicKey);
-				var assembly = new AssemblyDefUser(asmName, new Version(0, 0), pubKey);
-				assembly.Modules.Add(new ModuleDefUser(asmName + ".dll"));
-				ModuleDef module = assembly.ManifestModule;
-				assembly.ManifestModule.Kind = ModuleKind.Dll;
-				var asmRef = new AssemblyRefUser(module.Assembly);
-				if (!hasPacker) {
-					foreach (EmbeddedResource res in resources) {
+			    if (writer.TheOptions.StrongNameKey != null)
+			    {
+			        pubKey = PublicKeyBase.CreatePublicKey(writer.TheOptions.StrongNameKey.PublicKey);
+			    }
+			    var module = new ModuleDefUser(asmName + ".dll", Guid.NewGuid(), ctx.Module.CorLibTypes.AssemblyRef);
+			    module.Kind = ModuleKind.Dll;
+			    var assembly = new AssemblyDefUser(asmName, new Version(1, 0), pubKey);
+			    assembly.Modules.Add(module);
+
+                module.Characteristics = ctx.Module.Characteristics;
+                module.Cor20HeaderFlags = ctx.Module.Cor20HeaderFlags;
+                module.Cor20HeaderRuntimeVersion = ctx.Module.Cor20HeaderRuntimeVersion;
+                module.DllCharacteristics = ctx.Module.DllCharacteristics;
+                module.EncBaseId = ctx.Module.EncBaseId;
+                module.EncId = ctx.Module.EncId;
+                module.Generation = ctx.Module.Generation;
+                module.Machine = ctx.Module.Machine;
+                module.RuntimeVersion = ctx.Module.RuntimeVersion;
+                module.TablesHeaderVersion = ctx.Module.TablesHeaderVersion;
+                module.RuntimeVersion = ctx.Module.RuntimeVersion;
+
+                var asmRef = new AssemblyRefUser(module.Assembly);
+			    if (pubKey == null)
+			    {
+			        asmRef.Attributes &= ~AssemblyAttributes.PublicKey; // ssdi: fix incorrect flags set in dnlib, "CS0009 .... -- Invalid public key." into VS2015, VS2017 msBuild
+                }
+                if (!hasPacker) {
+					foreach (var res in resources) {
 						res.Attributes = ManifestResourceAttributes.Public;
 						module.Resources.Add(res);
 						ctx.Module.Resources.Add(new AssemblyLinkedResource(res.Name, asmRef, res.Attributes));
 					}
 				}
 				byte[] moduleBuff;
-				using (var ms = new MemoryStream()) {
-					module.Write(ms, new ModuleWriterOptions { StrongNameKey = writer.TheOptions.StrongNameKey });
-					moduleBuff = ms.ToArray();
-				}
+                using (var ms = new MemoryStream())
+			    {
+			        module.Write(ms, new ModuleWriterOptions(ctx.Module) { StrongNameKey = writer.TheOptions.StrongNameKey });
+			        moduleBuff = ms.ToArray();
+			    }
 
-				// compress
-				moduleBuff = ctx.Context.Registry.GetService<ICompressionService>().Compress(
+		        // compress
+                moduleBuff = ctx.Context.Registry.GetService<ICompressionService>().Compress(
 					moduleBuff,
 					progress => ctx.Context.Logger.Progress((int)(progress * 10000), 10000));
 				ctx.Context.Logger.EndProgress();
