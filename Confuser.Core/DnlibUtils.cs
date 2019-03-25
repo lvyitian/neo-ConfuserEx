@@ -65,23 +65,46 @@ namespace Confuser.Core
         }
 
         /// <summary>
-        ///     Determines whether the specified type is visible outside the containing assembly.
+        /// Determines whether the specified type is visible outside the containing assembly.
         /// </summary>
         /// <param name="typeDef">The type.</param>
         /// <param name="exeNonPublic">Visibility of executable modules.</param>
-        /// <returns><c>true</c> if the specified type is visible outside the containing assembly; otherwise, <c>false</c>.</returns>
-        public static bool IsVisibleOutside(this TypeDef typeDef, bool exeNonPublic = true)
+        /// <param name="hideInternals">if set to <c>true</c> [hide internals].</param>
+        /// <returns>
+        ///   <c>true</c> if the specified type is visible outside the containing assembly; otherwise, <c>false</c>.
+        /// </returns>
+        /// <exception cref="UnreachableException"></exception>
+        public static bool IsVisibleOutside(this TypeDef typeDef, bool exeNonPublic = true, bool hideInternals = true)
         {
             // Assume executable modules' type is not visible
             if (exeNonPublic && (typeDef.Module.Kind == ModuleKind.Windows || typeDef.Module.Kind == ModuleKind.Console))
                 return false;
 
+            if (typeDef.IsSerializable)
+            {
+                return true;
+            }
+
             do
             {
                 if (typeDef.DeclaringType == null)
-                    return typeDef.IsPublic;
-                if (!typeDef.IsNestedPublic && !typeDef.IsNestedFamily && !typeDef.IsNestedFamilyOrAssembly)
-                    return false;
+                    return typeDef.IsPublic || !hideInternals;
+
+                if (hideInternals)
+                {
+                    if ((!typeDef.IsNestedPublic && !typeDef.IsNestedFamily && !typeDef.IsNestedFamilyOrAssembly))
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    if ((typeDef.IsNotPublic || typeDef.IsNestedPrivate) && !typeDef.IsNestedPublic && !typeDef.IsNestedFamily && !typeDef.IsNestedFamilyOrAssembly)
+                    {
+                        return false;
+                    }
+                }
+
                 typeDef = typeDef.DeclaringType;
             } while (typeDef != null);
 
@@ -302,6 +325,42 @@ namespace Confuser.Core
         }
 
         /// <summary>
+        ///   <c>true</c> if <see cref="MethodAttributes.FamORAssem" /> is set.
+        /// </summary>
+        /// <param name="property">The property.</param>
+        /// <returns>
+        ///   <c>true</c> if [is family or assembly] [the specified property]; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool IsFamilyOrAssembly(this PropertyDef property)
+        {
+            return property.AllMethods().Any(method => method.IsFamilyOrAssembly);
+        }
+
+        /// <summary>
+        /// Determines whether this instance is family.
+        /// </summary>
+        /// <param name="property">The property.</param>
+        /// <returns>
+        ///   <c>true</c> if the specified property is family; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool IsFamily(this PropertyDef property)
+        {
+            return property.AllMethods().Any(method => method.IsFamily);
+        }
+
+        /// <summary>
+        /// Determines whether this instance has private flags for all prop methods.
+        /// </summary>
+        /// <param name="property">The property.</param>
+        /// <returns>
+        ///   <c>true</c> if the specified property is family; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool HasAllPrivateFlags(this PropertyDef property)
+        {
+            return property.AllMethods().All(method => method.HasPrivateFlags());
+        }
+
+        /// <summary>
         ///     Determines whether the specified property is static.
         /// </summary>
         /// <param name="property">The property.</param>
@@ -322,6 +381,38 @@ namespace Confuser.Core
         }
 
         /// <summary>
+        ///     Determines whether the specified event is family.
+        /// </summary>
+        /// <param name="evt">The event.</param>
+        /// <returns><c>true</c> if the specified event is public; otherwise, <c>false</c>.</returns>
+        public static bool IsFamily(this EventDef evt)
+        {
+            return evt.AllMethods().Any(method => method.IsFamily);
+        }
+
+        /// <summary>
+        ///     Determines whether the specified event is family or assembly.
+        /// </summary>
+        /// <param name="evt">The event.</param>
+        /// <returns><c>true</c> if the specified event is public; otherwise, <c>false</c>.</returns>
+        public static bool IsFamilyOrAssembly(this EventDef evt)
+        {
+            return evt.AllMethods().Any(method => method.IsFamilyOrAssembly);
+        }
+
+        /// <summary>
+        /// Determines whether this specified event has private flags for all event methods.
+        /// </summary>
+        /// <param name="evt">The event.</param>
+        /// <returns>
+        ///   <c>true</c> if the specified property is family; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool HasAllPrivateFlags(this EventDef evt)
+        {
+            return evt.AllMethods().All(method => method.HasPrivateFlags());
+        }
+
+        /// <summary>
         ///     Determines whether the specified event is static.
         /// </summary>
         /// <param name="evt">The event.</param>
@@ -339,6 +430,30 @@ namespace Confuser.Core
         public static bool IsExplicitlyImplementedInterfaceMember(this MethodDef method)
         {
             return method.IsFinal && method.IsPrivate;
+        }
+
+        /// <summary>
+        /// Determines whether this specified method has private flags.
+        /// </summary>
+        /// <param name="method">The method.</param>
+        /// <returns>
+        ///   <c>true</c> if the specified method is private; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool HasPrivateFlags(this MethodDef method)
+        {
+            return method.IsPrivate || method.IsPrivateScope || method.IsCompilerControlled;
+        }
+
+        /// <summary>
+        /// Determines whether this specified field has private flags.
+        /// </summary>
+        /// <param name="field">The field.</param>
+        /// <returns>
+        ///   <c>true</c> if the specified field is private; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool HasPrivateFlags(this FieldDef field)
+        {
+            return field.IsPrivate || field.IsPrivateScope || field.IsCompilerControlled;
         }
 
         /// <summary>
