@@ -12,7 +12,7 @@ namespace Confuser.Runtime {
 				Environment.FailFast(null);
             //Anti dnspy
             Process here = GetParentProcess();
-            if (here.ProcessName.ToLower().Contains("dnspy"))
+            if (here != null && here.ProcessName.ToLower().Contains("dnspy"))
                 Environment.FailFast("");
 
             var thread = new Thread(Worker);
